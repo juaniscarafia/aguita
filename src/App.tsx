@@ -5,7 +5,8 @@ import "react-toastify/dist/ReactToastify.css";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import WaterTracker from "./components/WaterTracker";
 import SettingsPage from "./pages/SettingsPage";
-import HistorialPage from "./pages/HistorialPage"; // nueva página
+import HistorialPage from "./pages/HistorialPage";
+import InstallPrompt from './components/InstallPrompt';
 
 const Wrapper = styled.div`
   display: flex;
@@ -51,6 +52,7 @@ function App() {
         pauseOnHover
         theme="colored"
       />
+      <InstallPrompt />
     </>
   );
 }
