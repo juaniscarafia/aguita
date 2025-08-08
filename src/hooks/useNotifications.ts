@@ -20,11 +20,17 @@ export function useNotificationsControlled({
 }: UseNotificationsParams) {
   const timerRef = useRef<number | null>(null);
 
+  // Guardamos el callback en un ref (evita loops por cambio de identidad)
+  const cbRef = useRef<UseNotificationsParams["onPermissionChange"]>(undefined);
+  useEffect(() => {
+    cbRef.current = onPermissionChange;
+  }, [onPermissionChange]);
+
   const requestPermission = useCallback(async () => {
     const result = await Notification.requestPermission();
-    onPermissionChange?.(result);
+    cbRef.current?.(result);
     return result === "granted";
-  }, [onPermissionChange]);
+  }, []);
 
   const notifyNow = useCallback(async (title: string, body?: string) => {
     if (Notification.permission !== "granted") return false;
@@ -33,7 +39,7 @@ export function useNotificationsControlled({
       icon: "/icon-192x192.png",
       badge: "/icon-192x192.png",
       tag: "aguita-reminder",
-      renotify: true,
+      // renotify: true,
     });
   }, []);
 
@@ -49,10 +55,10 @@ export function useNotificationsControlled({
     clearTimer();
     // Dispara una ahora
     showViaSW("¡Hora de tomar agua!", { body: "Un vasito ahora te viene bárbaro 💧" });
-    // Programa luego
+    // Luego programa
     timerRef.current = window.setInterval(() => {
       showViaSW("¡Recordatorio de Agüita!", { body: "Pequeño trago = gran diferencia 💧" });
-    }, Math.max(60_000, intervalMs)); // mínimo 1 min
+    }, Math.max(60_000, intervalMs));
     return true;
   }, [clearTimer, intervalMs]);
 
@@ -60,14 +66,18 @@ export function useNotificationsControlled({
     clearTimer();
   }, [clearTimer]);
 
+  // Arrancar/parar según enabled/intervalMs
   useEffect(() => {
     if (enabled) start(); else stop();
     return () => stop();
   }, [enabled, intervalMs, start, stop]);
 
+  // Notificar el permiso una única vez al montar
   useEffect(() => {
-    onPermissionChange?.(Notification.permission);
-  }, [onPermissionChange]);
+    cbRef.current?.(Notification.permission);
+    // sin deps: intencional, solo una vez
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return { permission: Notification.permission, requestPermission, notifyNow, start, stop };
 }
