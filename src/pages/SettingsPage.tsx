@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import NotificationControls from "../components/NotificationControls";
+import { useNotificationsStore } from "../store/notificationsStore";
 
 const Page = styled.div`
   display: flex;
@@ -48,6 +49,8 @@ const SettingsPage = () => {
   const [intervalValue, setIntervalValue] = useState(1);
   const [intervalUnit, setIntervalUnit] = useState<"minutes" | "hours">("hours");
 
+  const { setIntervalMs } = useNotificationsStore();
+
   useEffect(() => {
     const saved = localStorage.getItem("noti-config");
     if (saved) {
@@ -56,8 +59,11 @@ const SettingsPage = () => {
       setEndTime(parsed.endTime);
       setIntervalValue(parsed.intervalValue);
       setIntervalUnit(parsed.intervalUnit);
+      if (typeof parsed.intervalMs === "number") {
+        setIntervalMs(parsed.intervalMs);
+      }
     }
-  }, []);
+  }, [setIntervalMs]);
 
   const handleSave = () => {
     const intervalMs =
@@ -74,6 +80,7 @@ const SettingsPage = () => {
     };
 
     localStorage.setItem("noti-config", JSON.stringify(config));
+    setIntervalMs(intervalMs);
     toast.success("Configuración guardada");
   };
 

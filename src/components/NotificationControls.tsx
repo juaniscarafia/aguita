@@ -5,7 +5,7 @@ import { useNotificationsStore } from "../store/notificationsStore";
 export default function NotificationControls() {
   const { enabled, intervalMs, setEnabled, setIntervalMs } = useNotificationsStore();
 
-  const { permission, requestPermission, start, stop } = useNotificationsControlled({
+  const { permission, requestPermission, stop } = useNotificationsControlled({
     enabled,
     intervalMs,
     onPermissionChange: (p) => {
