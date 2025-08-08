@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 import NotificationControls from "../components/NotificationControls";
 import { useNotificationsStore } from "../store/notificationsStore";
+import PushSetup from "../components/PushSetup";
 
 const Page = styled.div`
   display: flex;
@@ -123,6 +124,7 @@ const SettingsPage = () => {
       <Button onClick={() => navigate("/")}>Volver</Button>
 
       <NotificationControls />
+      <PushSetup />
     </Page>
   );
 };
