@@ -1,0 +1,6 @@
+[functions]
+  node_bundler = "esbuild"
+
+[[scheduled.functions]]
+  name = "push-cron"
+  cron = "0 * * * *" # cada hora

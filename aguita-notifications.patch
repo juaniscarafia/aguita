@@ -1,0 +1,443 @@
+### PATCH for aguita (notifications + PWA + web push)
+--- a/index.html
++++ b/index.html
+@@ -8,7 +8,6 @@
+     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet" />
+-    <link rel="manifest" href="/manifest.webmanifest" />
+     <meta name="theme-color" content="#00bcd4" />
+     <title>Agüita</title>
+ </head>
+--- a/src/hooks/useNotifications.ts
++++ b/src/hooks/useNotifications.ts
+@@ -1,145 +1,83 @@
+-// import { useEffect, useRef } from "react";
++import { useCallback, useEffect, useRef } from "react";
+ 
+-// export const useNotifications = () => {
+-//   const intervalRef = useRef<number | null>(null);
++type UseNotificationsParams = {
++  enabled: boolean;
++  intervalMs: number;
++  onPermissionChange?: (p: NotificationPermission) => void;
++};
+ 
+-//   const requestPermission = async () => {
+-//     if (!("Notification" in window)) return false;
+-//     const result = await Notification.requestPermission();
+-//     return result === "granted";
+-//   };
++async function showViaSW(title: string, options?: NotificationOptions) {
++  if (!("serviceWorker" in navigator)) return false;
++  const reg = await navigator.serviceWorker.ready;
++  await reg.showNotification(title, options);
++  return true;
++}
+ 
+-//   const isInNotificationWindow = (startTime: string, endTime: string) => {
+-//     const now = new Date();
++export function useNotificationsControlled({
++  enabled,
++  intervalMs,
++  onPermissionChange,
++}: UseNotificationsParams) {
++  const timerRef = useRef<number | null>(null);
+ 
+-//     const [startHour, startMinute] = startTime.split(":").map(Number);
+-//     const [endHour, endMinute] = endTime.split(":").map(Number);
++  const requestPermission = useCallback(async () => {
++    const result = await Notification.requestPermission();
++    onPermissionChange?.(result);
++    return result === "granted";
++  }, [onPermissionChange]);
+ 
+-//     const start = new Date();
+-//     start.setHours(startHour, startMinute, 0, 0);
++  const notifyNow = useCallback(async (title: string, body?: string) => {
++    if (Notification.permission !== "granted") return false;
++    return showViaSW(title, {
++      body,
++      icon: "/icon-192x192.png",
++      badge: "/icon-192x192.png",
++      tag: "aguita-reminder",
++      renotify: true,
++    });
++  }, []);
+ 
+-//     const end = new Date();
+-//     end.setHours(endHour, endMinute, 0, 0);
++  const clearTimer = useCallback(() => {
++    if (timerRef.current) {
++      window.clearInterval(timerRef.current);
++      timerRef.current = null;
++    }
++  }, []);
+ 
+-//     return now >= start && now <= end;
+-//   };
++  const start = useCallback(() => {
++    if (Notification.permission !== "granted") return false;
++    clearTimer();
++    showViaSW("¡Hora de tomar agua!", { body: "Un vasito ahora te viene bárbaro 💧" });
++    timerRef.current = window.setInterval(() => {
++      showViaSW("¡Recordatorio de Agüita!", { body: "Pequeño trago = gran diferencia 💧" });
++    }, Math.max(60_000, intervalMs));
++    return true;
++  }, [clearTimer, intervalMs]);
+ 
+-//   const startNotifications = () => {
+-//     if (!("Notification" in window)) return;
+-
+-//     const configRaw = localStorage.getItem("noti-config");
+-//     const config = configRaw
+-//       ? JSON.parse(configRaw)
+-//       : {
+-//           startTime: "09:00",
+-//           endTime: "22:00",
+-//           intervalMs: 60 * 60 * 1000, // 1 hora por defecto
+-//         };
+-
+-//     if (intervalRef.current) clearInterval(intervalRef.current); // Evitar múltiples timers
+-
+-//     intervalRef.current = window.setInterval(() => {
+-//       if (isInNotificationWindow(config.startTime, config.endTime)) {
+-//         new Notification("💧 Agüita", {
+-//           body: "¡Es hora de tomar un vasito de agua!",
+-//         });
+-//       }
+-//     }, config.intervalMs);
+-//   };
+-
+-//   const stopNotifications = () => {
+-//     if (intervalRef.current) {
+-//       clearInterval(intervalRef.current);
+-//       intervalRef.current = null;
+-//     }
+-//   };
+-
+-//   useEffect(() => {
+-//     return () => {
+-//       stopNotifications(); // Limpieza al desmontar
+-//     };
+-//   }, []);
+-
+-//   return {
+-//     requestPermission,
+-//     startNotifications,
+-//     stopNotifications,
+-//   };
+-// };
+-
+-import { useEffect, useRef } from "react";
+-
+-const ENABLED_KEY = "noti-enabled";
+-
+-export const useNotifications = () => {
+-  const intervalRef = useRef<number | null>(null);
+-
+-  const requestPermission = async () => {
+-    if (!("Notification" in window)) return false;
+-    const result = await Notification.requestPermission();
+-    return result === "granted";
+-  };
+-
+-  const isInNotificationWindow = (startTime: string, endTime: string) => {
+-    const now = new Date();
+-    const [sH, sM] = startTime.split(":").map(Number);
+-    const [eH, eM] = endTime.split(":").map(Number);
+-
+-    const start = new Date();
+-    start.setHours(sH, sM, 0, 0);
+-    const end = new Date();
+-    end.setHours(eH, eM, 0, 0);
+-
+-    return now >= start && now <= end;
+-  };
+-
+-  const startNotifications = () => {
+-    if (!("Notification" in window)) return;
+-
+-    const configRaw = localStorage.getItem("noti-config");
+-    const config = configRaw
+-      ? JSON.parse(configRaw)
+-      : {
+-          startTime: "09:00",
+-          endTime: "22:00",
+-          intervalMs: 60 * 60 * 1000, // 1h
+-        };
+-
+-    // evitar múltiples timers
+-    if (intervalRef.current) clearInterval(intervalRef.current);
+-
+-    intervalRef.current = window.setInterval(() => {
+-      if (isInNotificationWindow(config.startTime, config.endTime)) {
+-        new Notification("💧 Agüita", {
+-          body: "¡Es hora de tomar un vasito de agua!",
+-        });
+-      }
+-    }, config.intervalMs);
+-
+-    localStorage.setItem(ENABLED_KEY, "true");
+-  };
+-
+-  const stopNotifications = () => {
+-    if (intervalRef.current) {
+-      clearInterval(intervalRef.current);
+-      intervalRef.current = null;
+-    }
+-    localStorage.setItem(ENABLED_KEY, "false");
+-  };
+-
+-  const wasEnabled = () => localStorage.getItem(ENABLED_KEY) === "true";
++  const stop = useCallback(() => {
++    clearTimer();
++  }, [clearTimer]);
+ 
+   useEffect(() => {
++    if (enabled) {
++      start();
++    } else {
++      stop();
++    }
+     return () => {
+-      // limpieza al desmontar
+-      if (intervalRef.current) clearInterval(intervalRef.current);
++      stop();
+     };
+-  }, []);
++  }, [enabled, intervalMs, start, stop]);
++
++  useEffect(() => {
++    onPermissionChange?.(Notification.permission);
++  }, [onPermissionChange]);
+ 
+   return {
++    permission: Notification.permission,
+     requestPermission,
+-    startNotifications,
+-    stopNotifications,
+-    wasEnabled,
++    notifyNow,
++    start,
++    stop,
+   };
+-};
++}
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -1,6 +1,7 @@
+ import { StrictMode } from 'react'
+ import { createRoot } from 'react-dom/client'
+ import App from './App.tsx'
++import { registerSW } from 'virtual:pwa-register'
+ 
+ createRoot(document.getElementById('root')!).render(
+   <StrictMode>
+@@ -20,4 +21,8 @@
+         console.error('❌ Error al registrar Service Worker:', error);
+       });
+   });
++
++// VitePWA: registra el Service Worker
++registerSW({ immediate: true });
++
+ }--- /dev/null
++++ b/NOTIFICACIONES.md
++# Notificaciones en Agüita
++
++Este PR hace dos cosas:
++1. Usa **vite-plugin-pwa** correctamente con `registerSW({ immediate: true })`.
++2. Implementa un hook `useNotifications` que muestra notificaciones mediante el **Service Worker** en lugar de `new Notification()`.
++
++## Cambios principales
++- `src/main.tsx`: se elimina el registro manual de `/sw.js` y se usa `virtual:pwa-register`.
++- `index.html`: se elimina el `<link rel="manifest">` (VitePWA lo inyecta).
++- `public/service-worker.js`: eliminado para evitar conflictos de SW duplicados.
++- `src/hooks/useNotifications.ts`: hook nuevo basado en `registration.showNotification(...)`.
++- `src/push/subscribe.ts`: helper para suscripción a **Web Push** con VAPID.
++- `netlify/functions/push-cron.ts`: _Scheduled Function_ de ejemplo que envía pushes a suscriptores.
++- `netlify.toml`: cron cada hora.
++
++## Cómo usar el hook en tu UI
++```tsx
++import { useNotifications } from "../hooks/useNotifications";
++
++const { permission, enabled, requestPermission, startNotifications, stopNotifications } = useNotifications("1h");
++
++<button onClick={requestPermission}>Permitir notificaciones</button>
++<button onClick={enabled ? stopNotifications : startNotifications}>
++  {enabled ? "Desactivar" : "Activar"} recordatorios
++</button>
++```
++
++> Nota: Sin **Web Push**, los recordatorios dependen de que la pestaña esté activa o con el SW listo y los timers no se congelen. Para recordatorios con la app cerrada, configuralo con _Web Push_ + la función programada.
++
++## Web Push (opcional pero recomendado)
++1. Generá tus llaves VAPID:
++   ```bash
++   npx web-push generate-vapid-keys
++   ```
++2. Guardá en Netlify env vars: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
++3. Implementá en el front la suscripción con `ensurePushSubscription(VAPID_PUBLIC_KEY)` y envía al backend el objeto de suscripción para persistirlo.
++4. Configurá `SUSCRIPTIONS_JSON` en Netlify (o mejor: léelos desde tu API) y la función `push-cron` enviará el push cada hora.
++
+--- /dev/null
++++ b/netlify.toml
++[functions]
++node_bundler = "esbuild"
++
++[[scheduled.functions]]
++name = "push-cron"
++# Corre cada hora en el minuto 0 (UTC)
++cron = "0 * * * *"
+--- /dev/null
++++ b/netlify/functions/push-cron.ts
++import type { Handler } from "@netlify/functions";
++import webpush from "web-push";
++
++// Variables de entorno necesarias:
++// VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (ej: mailto:tu-mail@dominio.com)
++// SUSCRIPTIONS_JSON: JSON con array de endpoints guardados [{endpoint, keys:{p256dh, auth}}, ...]
++
++export const handler: Handler = async () => {
++  try {
++    const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, SUSCRIPTIONS_JSON } = process.env;
++
++    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
++      return { statusCode: 500, body: "Faltan variables VAPID_*" };
++    }
++
++    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
++
++    const subs = JSON.parse(SUSCRIPTIONS_JSON || "[]");
++
++    const payload = JSON.stringify({
++      title: "¡Agüita!",
++      body: "Recordatorio programado 💧",
++      icon: "/icon-192x192.png",
++      tag: "aguita-reminder",
++      renotify: true,
++    });
++
++    const results = await Promise.allSettled(
++      subs.map((sub: any) => webpush.sendNotification(sub, payload))
++    );
++
++    const ok = results.filter(r => r.status === "fulfilled").length;
++    const failed = results.filter(r => r.status === "rejected").length;
++
++    return {
++      statusCode: 200,
++      body: JSON.stringify({ ok, failed }),
++    };
++  } catch (err: any) {
++    return { statusCode: 500, body: err?.message || "error" };
++  }
++};
+--- /dev/null
++++ b/src/components/NotificationControls.tsx
++import { toast } from "react-toastify";
++import { useNotificationsControlled } from "../hooks/useNotifications";
++import { useNotificationsStore } from "../store/notificationsStore";
++
++export default function NotificationControls() {
++  const { enabled, intervalMs, setEnabled, setIntervalMs } = useNotificationsStore();
++
++  const { permission, requestPermission, start, stop } = useNotificationsControlled({
++    enabled,
++    intervalMs,
++    onPermissionChange: (p) => {
++      if (p !== "granted") setEnabled(false);
++    },
++  });
++
++  const toggle = async () => {
++    if (enabled) {
++      stop();
++      setEnabled(false);
++      toast.info("🔕 Notificaciones desactivadas");
++    } else {
++      const ok = await requestPermission();
++      if (ok) {
++        setEnabled(true);
++        toast.success("🔔 Notificaciones activadas");
++      } else {
++        toast.error("No se concedió el permiso de notificaciones");
++      }
++    }
++  };
++
++  return (
++    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
++      <button onClick={toggle}>
++        {enabled ? "Desactivar recordatorios" : "Activar recordatorios"}
++      </button>
++      <select
++        value={String(intervalMs)}
++        onChange={(e) => setIntervalMs(Number(e.target.value))}
++        disabled={enabled}
++      >
++        <option value={30 * 60 * 1000}>Cada 30 min</option>
++        <option value={60 * 60 * 1000}>Cada 1 hora</option>
++        <option value={2 * 60 * 60 * 1000}>Cada 2 horas</option>
++      </select>
++      <small>Permiso: <b>{permission}</b></small>
++    </div>
++  );
++}
+--- /dev/null
++++ b/src/push/subscribe.ts
++export async function ensurePushSubscription(vapidPublicKey: string) {
++  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
++    throw new Error('Push no soportado en este navegador');
++  }
++  const reg = await navigator.serviceWorker.ready;
++  const existing = await reg.pushManager.getSubscription();
++  if (existing) return existing;
++
++  // Convert base64 VAPID public key to UInt8Array
++  function urlBase64ToUint8Array(base64String: string) {
++    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
++    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
++    const rawData = atob(base64);
++    const outputArray = new Uint8Array(rawData.length);
++    for (let i = 0; i < rawData.length; ++i) {
++      outputArray[i] = rawData.charCodeAt(i);
++    }
++    return outputArray;
++  }
++
++  const sub = await reg.pushManager.subscribe({
++    userVisibleOnly: true,
++    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
++  });
++  return sub;
++}
+--- /dev/null
++++ b/src/store/notificationsStore.ts
++import { create } from "zustand";
++import { persist } from "zustand/middleware";
++
++type State = {
++  enabled: boolean;
++  intervalMs: number;
++};
++type Actions = {
++  setEnabled: (v: boolean) => void;
++  setIntervalMs: (ms: number) => void;
++};
++
++export const useNotificationsStore = create<State & Actions>()(
++  persist(
++    (set) => ({
++      enabled: false,
++      intervalMs: 60 * 60 * 1000,
++      setEnabled: (v) => set({ enabled: v }),
++      setIntervalMs: (ms) => set({ intervalMs: ms }),
++    }),
++    { name: "aguita-notifications" }
++  )
++);
+--- a/public/service-worker.js
++++ /dev/null

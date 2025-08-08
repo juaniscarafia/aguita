@@ -2,6 +2,7 @@ import styled from "styled-components";
 import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
+import NotificationControls from "../components/NotificationControls";
 
 const Page = styled.div`
   display: flex;
@@ -113,6 +114,8 @@ const SettingsPage = () => {
 
       <SaveButton onClick={handleSave}>Guardar configuración</SaveButton>
       <Button onClick={() => navigate("/")}>Volver</Button>
+
+      <NotificationControls />
     </Page>
   );
 };
