@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
 // ⬇️ usamos el store para sincronizar intervalMs
 import { useNotificationsStore } from "../store/notificationsStore";
+import PushSetup from "../components/PushSetup";
 
 const Page = styled.div`
   display: flex;
@@ -140,6 +141,8 @@ export default function SettingsPage() {
         Permiso: <b>{Notification.permission}</b> · Recordatorios:{" "}
         <b>{enabled ? "activados" : "desactivados"}</b>
       </InlineInfo>
+
+      <PushSetup />
     </Page>
   );
 }
