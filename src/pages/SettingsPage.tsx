@@ -2,9 +2,8 @@ import styled from "styled-components";
 import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
-import NotificationControls from "../components/NotificationControls";
+// ⬇️ usamos el store para sincronizar intervalMs
 import { useNotificationsStore } from "../store/notificationsStore";
-import PushSetup from "../components/PushSetup";
 
 const Page = styled.div`
   display: flex;
@@ -43,15 +42,24 @@ const SaveButton = styled(Button)`
   background-color: #4caf50;
 `;
 
-const SettingsPage = () => {
+const InlineInfo = styled.div`
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #004d40;
+  opacity: 0.85;
+`;
+
+export default function SettingsPage() {
   const navigate = useNavigate();
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("22:00");
   const [intervalValue, setIntervalValue] = useState(1);
   const [intervalUnit, setIntervalUnit] = useState<"minutes" | "hours">("hours");
 
-  const { setIntervalMs } = useNotificationsStore();
+  // store para que el hook controlado tome el nuevo intervalo
+  const { enabled, intervalMs, setIntervalMs } = useNotificationsStore();
 
+  // cargar config guardada
   useEffect(() => {
     const saved = localStorage.getItem("noti-config");
     if (saved) {
@@ -63,11 +71,16 @@ const SettingsPage = () => {
       if (typeof parsed.intervalMs === "number") {
         setIntervalMs(parsed.intervalMs);
       }
+    } else {
+      // si no hay nada guardado, reflejar el valor del store en los campos
+      const mins = Math.max(1, Math.round(intervalMs / 60000));
+      setIntervalValue(mins >= 60 && mins % 60 === 0 ? mins / 60 : mins);
+      setIntervalUnit(mins >= 60 && mins % 60 === 0 ? "hours" : "minutes");
     }
-  }, [setIntervalMs]);
+  }, [intervalMs, setIntervalMs]);
 
   const handleSave = () => {
-    const intervalMs =
+    const newIntervalMs =
       intervalUnit === "minutes"
         ? intervalValue * 60 * 1000
         : intervalValue * 60 * 60 * 1000;
@@ -75,13 +88,13 @@ const SettingsPage = () => {
     const config = {
       startTime,
       endTime,
-      intervalMs,
+      intervalMs: newIntervalMs,
       intervalValue,
       intervalUnit,
     };
 
     localStorage.setItem("noti-config", JSON.stringify(config));
-    setIntervalMs(intervalMs);
+    setIntervalMs(newIntervalMs); // el hook controlado reprograma si está enabled
     toast.success("Configuración guardada");
   };
 
@@ -108,7 +121,7 @@ const SettingsPage = () => {
         type="number"
         min="1"
         value={intervalValue}
-        onChange={(e) => setIntervalValue(parseInt(e.target.value))}
+        onChange={(e) => setIntervalValue(parseInt(e.target.value || "0", 10) || 1)}
       />
 
       <Label>Unidad de intervalo:</Label>
@@ -123,10 +136,10 @@ const SettingsPage = () => {
       <SaveButton onClick={handleSave}>Guardar configuración</SaveButton>
       <Button onClick={() => navigate("/")}>Volver</Button>
 
-      <NotificationControls />
-      <PushSetup />
+      <InlineInfo>
+        Permiso: <b>{Notification.permission}</b> · Recordatorios:{" "}
+        <b>{enabled ? "activados" : "desactivados"}</b>
+      </InlineInfo>
     </Page>
   );
-};
-
-export default SettingsPage;
+}
